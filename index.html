@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Tienda Online</title>
     <style>
-        /* ===== ESTILOS ===== */
+        /* ===== ESTILOS BÁSICOS ===== */
         * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background:#f8f9fa; min-height:100vh; display:flex; flex-direction:column; }
         .header { background:#1a2a3a; color:#fff; padding:0.8rem 1.5rem; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; box-shadow:0 2px 6px rgba(0,0,0,0.15); position:sticky; top:0; z-index:100; }
@@ -119,6 +119,7 @@
         .image-preview.show { display:block; }
         .btn-reset { background:#dc3545; color:#fff; border:none; padding:0.5rem 1.2rem; border-radius:6px; cursor:pointer; font-weight:600; }
         .btn-reset:hover { background:#b02a37; }
+        .error-msg { color:#dc3545; background:#f8d7da; padding:0.8rem 1rem; border-radius:6px; border:1px solid #f5c6cb; margin:1rem 0; }
         @media (max-width:768px) { .header { flex-direction:column; align-items:stretch; gap:0.5rem; padding:0.6rem 1rem; } .header-actions { justify-content:center; } .grid-products { grid-template-columns:repeat(auto-fill,minmax(min(100%,160px),1fr)); gap:1rem; } .admin-form .form-row { grid-template-columns:1fr; } .cart-item { flex-direction:column; align-items:stretch; gap:0.3rem; } .modal-box { padding:1.2rem; } .product-card .img-placeholder { height:130px; } .table-wrapper { font-size:0.75rem; } th,td { padding:0.3rem 0.4rem; } .admin-tabs button { padding:0.3rem 0.8rem; font-size:0.8rem; } }
         @media (max-width:480px) { .grid-products { grid-template-columns:1fr 1fr; gap:0.8rem; } .header h1 { font-size:1.2rem; } .header-actions button { font-size:0.7rem; padding:0.2rem 0.6rem; } .product-card .info { padding:0.5rem; } .product-card .info h3 { font-size:0.9rem; } .product-card .info .price { font-size:0.95rem; } .product-card .info .description { font-size:0.75rem; -webkit-line-clamp:1; } .product-card .info button { font-size:0.8rem; padding:0.4rem; } .modal-box { padding:1rem; } .welcome-notes { font-size:0.85rem; padding:0.5rem 0.8rem; } }
     </style>
@@ -136,9 +137,15 @@
 
     <!-- ===== CONTENEDOR ===== -->
     <div class="container">
+        <!-- Mensaje de bienvenida -->
         <div id="welcomeNotes" class="welcome-notes" style="display:none;"></div>
+
+        <!-- Mensaje de error de conexión -->
+        <div id="connectionError" class="error-msg" style="display:none;"></div>
+
+        <!-- TIENDA -->
         <div id="shopSection" class="section active">
-            <div id="productGrid" class="grid-products"></div>
+            <div id="productGrid" class="grid-products"><p class="empty-msg">Cargando productos...</p></div>
             <div class="cart-section" id="cartSection">
                 <h2>🛒 Carrito</h2>
                 <div id="cartItems"><p class="empty-cart">El carrito está vacío.</p></div>
@@ -280,36 +287,69 @@
     <div class="footer"><div id="footerText"></div></div>
 
     <!-- ============================================================= -->
-    <!--  JAVASCRIPT COMPLETO                                           -->
+    <!--  JAVASCRIPT COMPLETO (con tu URL ya puesta)                    -->
     <!-- ============================================================= -->
     <script>
         // ============================================================
-        //  CONFIGURACIÓN DE LA API (URL de Google Apps Script)
+        //  CONFIGURACIÓN DE LA API (¡TU URL!)
         // ============================================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbwJ4bYAeoZ0nBkd_QlO-f5l7qtKY9yoS8XFWFP1qu4jgWRAdyN6NEGEBdijvrUKksyq/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxdbX6RoYU6H3XMNEuUzpqggMsElfsLoet9ej-hV2p6IMLDzWEGdJN2VAQxksD4FcraPA/exec';
 
         // ============================================================
-        //  FUNCIONES DE COMUNICACIÓN CON LA API
+        //  FUNCIONES DE COMUNICACIÓN CON LA API (con manejo de errores)
         // ============================================================
         async function apiGet(action, params = {}) {
             const url = new URL(API_URL);
             url.searchParams.append('action', action);
             Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
-            const res = await fetch(url.toString());
-            return res.json();
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            
+            try {
+                const res = await fetch(url.toString(), { 
+                    signal: controller.signal,
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                clearTimeout(timeoutId);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return await res.json();
+            } catch (err) {
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') {
+                    throw new Error('La petición tardó demasiado. Verifica tu conexión a internet.');
+                }
+                throw new Error(`Error de red: ${err.message}. Verifica que la URL sea correcta y que el Web App tenga acceso "Cualquiera".`);
+            }
         }
 
         async function apiPost(action, payload) {
-            const res = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, ...payload })
-            });
-            return res.json();
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, ...payload }),
+                    signal: controller.signal,
+                    mode: 'cors'
+                });
+                clearTimeout(timeoutId);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return await res.json();
+            } catch (err) {
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') {
+                    throw new Error('La petición tardó demasiado. Revisa tu conexión.');
+                }
+                throw new Error(`Error al guardar: ${err.message}`);
+            }
         }
 
         // ============================================================
-        //  MODELO DE DATOS (ahora usa la API)
+        //  MODELO DE DATOS
         // ============================================================
         let appData = {
             products: [],
@@ -332,6 +372,9 @@
         //  CARGAR DATOS DESDE LA API
         // ============================================================
         async function loadAllData() {
+            const errorDiv = document.getElementById('connectionError');
+            errorDiv.style.display = 'none';
+            
             try {
                 // Cargar productos
                 const productsRes = await apiGet('getProducts');
@@ -357,7 +400,6 @@
                 const ordersRes = await apiGet('getOrders');
                 if (ordersRes.success) {
                     appData.orders = ordersRes.data || [];
-                    // Calcular nextOrderId
                     if (appData.orders.length > 0) {
                         const maxId = Math.max(...appData.orders.map(o => o.id || 0));
                         appData.nextOrderId = maxId + 1;
@@ -374,7 +416,19 @@
                 loadConfigForm();
             } catch (err) {
                 console.error('Error cargando datos:', err);
-                alert('Error al cargar los datos. Verifica que la API esté desplegada correctamente.');
+                errorDiv.style.display = 'block';
+                errorDiv.innerHTML = `
+                    ❌ Error de conexión:<br>
+                    ${err.message}<br><br>
+                    <strong>¿Qué hacer?</strong><br>
+                    1. Verifica que tu Web App de Google Apps Script esté desplegado con acceso <strong>"Cualquiera"</strong>.<br>
+                    2. Asegúrate de haber ejecutado la función <strong>setup()</strong> en Apps Script.<br>
+                    3. Revisa tu conexión a internet.<br>
+                    4. Si el problema persiste, vuelve a desplegar el Web App y actualiza la URL en el código.
+                `;
+                document.getElementById('adminProductList').innerHTML = `<p class="empty-msg" style="color:#dc3545;">⚠️ Error de conexión</p>`;
+                document.getElementById('adminOrderList').innerHTML = `<p class="empty-msg" style="color:#dc3545;">⚠️ Error de conexión</p>`;
+                document.getElementById('productGrid').innerHTML = `<p class="empty-msg" style="color:#dc3545;">⚠️ Error de conexión</p>`;
             }
         }
 
@@ -604,7 +658,7 @@
         };
 
         // ============================================================
-        //  CHECKOUT
+        //  CHECKOUT (resumen y confirmación)
         // ============================================================
         function openCheckout() {
             if (cart.length === 0) { alert('Carrito vacío.'); return; }
@@ -779,22 +833,16 @@
                 deliveryPhoto: null
             };
 
-            // Guardar en Sheets
             try {
                 const result = await apiPost('saveOrder', { order: newOrder });
-                if (!result.success) {
-                    throw new Error(result.error || 'Error al guardar pedido');
-                }
+                if (!result.success) throw new Error(result.error || 'Error al guardar pedido');
                 // Actualizar productos en Sheets (stock)
                 for (const item of cart) {
                     const p = appData.products.find(pr => pr.id === item.productId);
-                    if (p) {
-                        await apiPost('saveProduct', { product: p });
-                    }
+                    if (p) await apiPost('saveProduct', { product: p });
                 }
             } catch (err) {
                 alert('Error al guardar el pedido: ' + err.message);
-                // Revertir stock local
                 for (const item of cart) {
                     const p = appData.products.find(pr => pr.id === item.productId);
                     if (p) p.stock += item.qty;
@@ -802,7 +850,6 @@
                 return;
             }
 
-            // Limpiar carrito y actualizar UI
             cart = [];
             renderCart();
             renderShopProducts();
@@ -810,11 +857,9 @@
             renderAdminOrders();
 
             document.getElementById('checkoutModal').classList.remove('show');
-
-            // Mostrar confirmación
             showConfirmation(newOrder);
 
-            // Notificaciones (Telegram, correo) - usar mismo código que antes
+            // Notificaciones (Telegram, correo)
             sendProviderNotifications(newOrder);
             sendTelegramNotification(newOrder, 'Nuevo pedido (general)');
             if (appData.gasWebAppUrl) {
@@ -882,15 +927,12 @@
                 const itemsList = prov.items.map(i => `  • ${i.name} x${i.qty} = ${formatCurrency(i.price * i.qty, i.currency || 'CUP')}`).join('\n');
                 const message = `
         📦 Nuevo pedido #${order.id} - Productos a su cargo
-
         👤 Cliente: ${order.customerName}
         📱 Teléfono: ${order.phone}
         📧 Email: ${order.email}
         📍 Dirección: ${order.address}
-
         Productos:
         ${itemsList}
-
         Total: ${formatCurrency(prov.items.reduce((sum, i) => sum + i.price * i.qty, 0), order.currency)}
         Fecha: ${new Date(order.date).toLocaleString()}
         `;
@@ -1121,7 +1163,6 @@
             try {
                 const res = await apiPost('saveProduct', { product });
                 if (!res.success) throw new Error(res.error || 'Error al guardar');
-                // Actualizar local
                 if (id) {
                     const idx = appData.products.findIndex(p => p.id === id);
                     if (idx !== -1) appData.products[idx] = product;
@@ -1389,7 +1430,6 @@
             if (!confirm('⚠️ ¿Borrar TODOS los pedidos? No se puede deshacer.')) return;
             if (!confirm('¿Realmente deseas continuar?')) return;
             try {
-                // Eliminar uno por uno (o podrías limpiar toda la hoja)
                 for (const order of appData.orders) {
                     await apiGet('deleteOrder', { id: order.id });
                 }
