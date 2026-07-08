@@ -799,11 +799,16 @@
                             </select>
                         </div>
                         <div class="form-group"><label>Stock</label><input type="number" id="prodStockAdmin" min="0" required></div>
+                        
+                        <!-- ===== NUEVO: Solo campo de imagen desde archivo (sin URL) ===== -->
                         <div class="form-group">
-                            <label>URL de imagen (Drive, Imgur, etc.)</label>
-                            <input type="text" id="prodImageAdmin" placeholder="https://drive.google.com/uc?export=view&id=...">
-                            <div class="config-help">Puedes usar imágenes de Google Drive (obtén el enlace de visualización) o cualquier URL pública.</div>
+                            <label>Imagen del producto (selecciona un archivo)</label>
+                            <input type="file" id="prodImageFile" accept="image/*">
+                            <img id="imagePreview" class="image-preview" alt="Vista previa">
+                            <div class="config-help">Selecciona una imagen JPG, PNG o GIF desde tu dispositivo.</div>
                         </div>
+                        <!-- ===== FIN NUEVO ===== -->
+
                         <div class="form-group">
                             <label>Detalles del producto (descripción)</label>
                             <textarea id="prodDescription" rows="3" placeholder="Breve descripción..."></textarea>
@@ -1110,7 +1115,7 @@
         const prodPriceAdmin = document.getElementById('prodPriceAdmin');
         const prodCurrencyAdmin = document.getElementById('prodCurrencyAdmin');
         const prodStockAdmin = document.getElementById('prodStockAdmin');
-        const prodImageAdmin = document.getElementById('prodImageAdmin');
+        const prodImageFile = document.getElementById('prodImageFile'); // solo file input
         const prodDescription = document.getElementById('prodDescription');
         const prodProviderChatId = document.getElementById('prodProviderChatId');
         const prodProviderEmail = document.getElementById('prodProviderEmail');
@@ -2043,10 +2048,19 @@
             prodPriceAdmin.value = p.price;
             prodCurrencyAdmin.value = p.currency || 'CUP';
             prodStockAdmin.value = p.stock;
-            prodImageAdmin.value = p.image || '';
             prodDescription.value = p.description || '';
             prodProviderChatId.value = p.providerChatId || '';
             prodProviderEmail.value = p.providerEmail || '';
+            // Mostrar vista previa de la imagen (si existe)
+            if (p.image) {
+                imagePreview.src = p.image;
+                imagePreview.classList.add('show');
+            } else {
+                imagePreview.classList.remove('show');
+                imagePreview.src = '';
+            }
+            // Resetear input file
+            prodImageFile.value = '';
             cancelEditAdmin.style.display = 'inline-block';
         };
 
@@ -2054,6 +2068,9 @@
             productFormAdmin.reset();
             editProductId.value = '';
             cancelEditAdmin.style.display = 'none';
+            imagePreview.classList.remove('show');
+            imagePreview.src = '';
+            prodImageFile.value = '';
             prodDescription.value = '';
             prodProviderChatId.value = '';
             prodProviderEmail.value = '';
@@ -2067,10 +2084,17 @@
             const price = parseFloat(prodPriceAdmin.value);
             const currency = prodCurrencyAdmin.value;
             const stock = parseInt(prodStockAdmin.value);
-            const image = prodImageAdmin.value.trim();
             const description = prodDescription.value.trim();
             const providerChatId = prodProviderChatId.value.trim();
             const providerEmail = prodProviderEmail.value.trim();
+
+            // Obtener la imagen desde la previsualización (si se ha subido una nueva)
+            let image = imagePreview.src && imagePreview.classList.contains('show') ? imagePreview.src : '';
+            // Si no hay preview y se está editando, conservar la imagen existente
+            if (!image && id) {
+                const existing = appData.products.find(p => p.id === id);
+                if (existing && existing.image) image = existing.image;
+            }
 
             if (!name || isNaN(price) || isNaN(stock) || price < 0 || stock < 0) { alert('Datos inválidos.'); return; }
             if (id) {
@@ -2093,6 +2117,9 @@
             productFormAdmin.reset();
             editProductId.value = '';
             cancelEditAdmin.style.display = 'none';
+            imagePreview.classList.remove('show');
+            imagePreview.src = '';
+            prodImageFile.value = '';
             prodDescription.value = '';
             prodProviderChatId.value = '';
             prodProviderEmail.value = '';
