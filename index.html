@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Tienda Online</title>
     <style>
-        /* ===== ESTILOS BÁSICOS ===== */
+        /* ===== ESTILOS (igual que antes) ===== */
         * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background:#f8f9fa; min-height:100vh; display:flex; flex-direction:column; }
         .header { background:#1a2a3a; color:#fff; padding:0.8rem 1.5rem; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; box-shadow:0 2px 6px rgba(0,0,0,0.15); position:sticky; top:0; z-index:100; }
@@ -287,16 +287,17 @@
     <div class="footer"><div id="footerText"></div></div>
 
     <!-- ============================================================= -->
-    <!--  JAVASCRIPT COMPLETO (con tu URL ya puesta)                    -->
+    <!--  JAVASCRIPT COMPLETO                                           -->
     <!-- ============================================================= -->
     <script>
         // ============================================================
-        //  CONFIGURACIÓN DE LA API (¡TU URL!)
+        //  CONFIGURACIÓN DE LA API (ACTUALIZA CON TU URL)
         // ============================================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxdbX6RoYU6H3XMNEuUzpqggMsElfsLoet9ej-hV2p6IMLDzWEGdJN2VAQxksD4FcraPA/exec';
+        // 🔥 IMPORTANTE: Reemplaza con la URL que obtengas tras desplegar el nuevo script
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwsR0jkjrfsffbkrQi3AfgK8X5Cj1Y8U5mn9A8LDU4l8SxDEwffUjChDwkCPZazguyYsg/exec';
 
         // ============================================================
-        //  FUNCIONES DE COMUNICACIÓN CON LA API (con manejo de errores)
+        //  FUNCIONES DE COMUNICACIÓN CON LA API
         // ============================================================
         async function apiGet(action, params = {}) {
             const url = new URL(API_URL);
@@ -326,7 +327,7 @@
 
         async function apiPost(action, payload) {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
             
             try {
                 const res = await fetch(API_URL, {
@@ -338,7 +339,12 @@
                 });
                 clearTimeout(timeoutId);
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                return await res.json();
+                const text = await res.text();
+                try {
+                    return JSON.parse(text);
+                } catch(e) {
+                    throw new Error('Respuesta no JSON: ' + text.substring(0, 100));
+                }
             } catch (err) {
                 clearTimeout(timeoutId);
                 if (err.name === 'AbortError') {
@@ -658,7 +664,7 @@
         };
 
         // ============================================================
-        //  CHECKOUT (resumen y confirmación)
+        //  CHECKOUT
         // ============================================================
         function openCheckout() {
             if (cart.length === 0) { alert('Carrito vacío.'); return; }
@@ -771,7 +777,7 @@
         });
 
         // ============================================================
-        //  ENVÍO DE PEDIDO (con API)
+        //  ENVÍO DE PEDIDO
         // ============================================================
         document.getElementById('orderForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -808,7 +814,7 @@
                 return { productId: i.productId, name: p.name, price: p.price, currency: p.currency, qty: i.qty };
             });
 
-            // Descontar stock localmente (y luego se actualizará en la base)
+            // Descontar stock localmente
             for (const item of cart) {
                 const p = appData.products.find(pr => pr.id === item.productId);
                 if (p) p.stock -= item.qty;
@@ -836,7 +842,6 @@
             try {
                 const result = await apiPost('saveOrder', { order: newOrder });
                 if (!result.success) throw new Error(result.error || 'Error al guardar pedido');
-                // Actualizar productos en Sheets (stock)
                 for (const item of cart) {
                     const p = appData.products.find(pr => pr.id === item.productId);
                     if (p) await apiPost('saveProduct', { product: p });
@@ -859,7 +864,6 @@
             document.getElementById('checkoutModal').classList.remove('show');
             showConfirmation(newOrder);
 
-            // Notificaciones (Telegram, correo)
             sendProviderNotifications(newOrder);
             sendTelegramNotification(newOrder, 'Nuevo pedido (general)');
             if (appData.gasWebAppUrl) {
@@ -878,7 +882,7 @@
         });
 
         // ============================================================
-        //  FUNCIONES DE NOTIFICACIÓN (Telegram, email)
+        //  FUNCIONES DE NOTIFICACIÓN
         // ============================================================
         async function sendEmailWithGAS(order) {
             const url = appData.gasWebAppUrl;
@@ -1062,7 +1066,7 @@
         };
 
         // ============================================================
-        //  ADMIN: RENDER PRODUCTOS
+        //  ADMIN
         // ============================================================
         function renderAdminProducts() {
             const list = document.getElementById('adminProductList');
@@ -1202,9 +1206,6 @@
             }
         };
 
-        // ============================================================
-        //  ADMIN: RENDER PEDIDOS
-        // ============================================================
         function renderAdminOrders() {
             const list = document.getElementById('adminOrderList');
             if (appData.orders.length === 0) {
@@ -1245,9 +1246,6 @@
             list.innerHTML = html;
         }
 
-        // ============================================================
-        //  DELEGACIÓN DE EVENTOS EN PEDIDOS
-        // ============================================================
         document.getElementById('adminOrderList').addEventListener('click', function(e) {
             const target = e.target.closest('button');
             if (!target) return;
@@ -1273,9 +1271,6 @@
             }
         });
 
-        // ============================================================
-        //  FUNCIONES DE ACCIÓN PARA PEDIDOS
-        // ============================================================
         async function changeOrderStatus(id, status) {
             try {
                 const res = await apiGet('updateOrderStatus', { id, status });
@@ -1383,9 +1378,6 @@
         document.getElementById('orderDetailClose').addEventListener('click', () => document.getElementById('orderDetailModal').classList.remove('show'));
         document.getElementById('orderDetailModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('show'); });
 
-        // ============================================================
-        //  ADMIN: CONFIGURACIÓN
-        // ============================================================
         function loadConfigForm() {
             document.getElementById('shippingCost').value = appData.shippingCost;
             document.getElementById('transferFee').value = appData.transferFee;
@@ -1423,9 +1415,6 @@
             }
         });
 
-        // ============================================================
-        //  REINICIAR PEDIDOS
-        // ============================================================
         document.getElementById('resetOrdersBtn').addEventListener('click', async function() {
             if (!confirm('⚠️ ¿Borrar TODOS los pedidos? No se puede deshacer.')) return;
             if (!confirm('¿Realmente deseas continuar?')) return;
@@ -1442,9 +1431,6 @@
             }
         });
 
-        // ============================================================
-        //  CONFIRMACIÓN DE ENTREGA (repartidor)
-        // ============================================================
         function showConfirmView(orderId) {
             document.getElementById('shopSection').classList.remove('active');
             document.getElementById('adminSection').classList.remove('active');
