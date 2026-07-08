@@ -176,10 +176,10 @@
                         </div>
                         <div class="form-group"><label>Stock</label><input type="number" id="prodStockAdmin" min="0" required></div>
                         <div class="form-group">
-                            <label>Imagen del producto</label>
-                            <input type="file" id="prodImageFile" accept="image/*">
+                            <label>Link de la imagen del producto</label>
+                            <input type="url" id="prodImageUrl" placeholder="https://ejemplo.com/mi-imagen.jpg">
                             <img id="imagePreview" class="image-preview" alt="Vista previa">
-                            <div class="config-help">Selecciona una imagen JPG, PNG o GIF desde tu dispositivo.</div>
+                            <div class="config-help">Pega el link de una imagen ya subida (Google Drive público, Imgur, Postimages, etc.). No subas el archivo directo: el link es liviano y evita errores al guardar.</div>
                         </div>
                         <div class="form-group">
                             <label>Detalles del producto</label>
@@ -285,7 +285,7 @@
         // ============================================================
         //  CONFIGURACIÓN DE LA API (ACTUALIZA CON TU URL)
         // ============================================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxALxjvRl1GWHLiMtcauvCx2eMP5W-YT5ujhMolpXMAbJW8fyI7tCdn__3SejNPsR3anw/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwLbrG0w99Ccd3Engcfcje0Tag4QBUCx5MOVemjzJUwTdKlMZx3OYBJbaQonfP_oVG4Ig/exec';
 
         // ============================================================
         //  FUNCIONES DE COMUNICACIÓN CON LA API (JSONP)
@@ -776,6 +776,14 @@
                 if (!p || p.stock < item.qty) { alert('Stock insuficiente.'); return; }
             }
 
+            // ===== Indicador de "procesando" =====
+            const submitBtn = e.target.querySelector('.btn-submit');
+            const originalBtnText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Procesando pedido...';
+            submitBtn.style.opacity = '0.7';
+            submitBtn.style.cursor = 'wait';
+
             const firstProduct = appData.products.find(p => p.id === cart[0].productId);
             const mainCurrency = firstProduct ? firstProduct.currency : 'CUP';
 
@@ -835,6 +843,10 @@
                     const p = appData.products.find(pr => pr.id === item.productId);
                     if (p) p.stock += item.qty;
                 }
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
                 return;
             }
 
@@ -844,24 +856,19 @@
             renderAdminProducts();
             renderAdminOrders();
 
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+            submitBtn.style.opacity = '1';
+            submitBtn.style.cursor = 'pointer';
+
             document.getElementById('checkoutModal').classList.remove('show');
             showConfirmation(newOrder);
+            const content = document.getElementById('confirmationContent').innerHTML;
+            document.getElementById('confirmationContent').innerHTML = content +
+                `<p style="color:#198754; font-weight:600;">✅ Te enviamos un correo de confirmación a ${newOrder.email}.</p>`;
 
             sendProviderNotifications(newOrder);
             sendTelegramNotification(newOrder, 'Nuevo pedido (general)');
-            if (appData.gasWebAppUrl) {
-                try {
-                    await sendEmailWithGAS(newOrder);
-                    const content = document.getElementById('confirmationContent').innerHTML;
-                    document.getElementById('confirmationContent').innerHTML = content +
-                        `<p style="color:#198754; font-weight:600;">✅ Correo enviado al cliente.</p>`;
-                } catch (err) {
-                    const content = document.getElementById('confirmationContent').innerHTML;
-                    document.getElementById('confirmationContent').innerHTML = content +
-                        `<p style="color:#dc3545;">⚠️ No se pudo enviar el correo automáticamente: ${err}</p>
-                        <p><button class="btn btn-primary" onclick="sendOrderEmail(${newOrder.id})">📧 Enviar correo manual (mailto)</button></p>`;
-                }
-            }
         });
 
         // ============================================================
@@ -1090,6 +1097,7 @@
             document.getElementById('prodProviderChatId').value = p.providerChatId || '';
             document.getElementById('prodProviderEmail').value = p.providerEmail || '';
             const preview = document.getElementById('imagePreview');
+            document.getElementById('prodImageUrl').value = p.image || '';
             if (p.image) {
                 preview.src = p.image;
                 preview.classList.add('show');
@@ -1097,7 +1105,6 @@
                 preview.classList.remove('show');
                 preview.src = '';
             }
-            document.getElementById('prodImageFile').value = '';
             document.getElementById('cancelEditAdmin').style.display = 'inline-block';
         };
 
@@ -1107,25 +1114,23 @@
             this.style.display = 'none';
             document.getElementById('imagePreview').classList.remove('show');
             document.getElementById('imagePreview').src = '';
+            document.getElementById('prodImageUrl').value = '';
             document.getElementById('prodDescription').value = '';
             document.getElementById('prodProviderChatId').value = '';
             document.getElementById('prodProviderEmail').value = '';
             document.getElementById('prodCurrencyAdmin').value = 'CUP';
         });
 
-        document.getElementById('prodImageFile').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(ev) {
-                    const preview = document.getElementById('imagePreview');
-                    preview.src = ev.target.result;
-                    preview.classList.add('show');
-                };
-                reader.readAsDataURL(file);
+        document.getElementById('prodImageUrl').addEventListener('input', function(e) {
+            const url = e.target.value.trim();
+            const preview = document.getElementById('imagePreview');
+            if (url) {
+                preview.src = url;
+                preview.classList.add('show');
+                preview.onerror = function() { preview.classList.remove('show'); };
             } else {
-                document.getElementById('imagePreview').classList.remove('show');
-                document.getElementById('imagePreview').src = '';
+                preview.classList.remove('show');
+                preview.src = '';
             }
         });
 
@@ -1139,8 +1144,7 @@
             const description = document.getElementById('prodDescription').value.trim();
             const providerChatId = document.getElementById('prodProviderChatId').value.trim();
             const providerEmail = document.getElementById('prodProviderEmail').value.trim();
-            let image = document.getElementById('imagePreview').src && document.getElementById('imagePreview').classList.contains('show') ?
-                document.getElementById('imagePreview').src : '';
+            let image = document.getElementById('prodImageUrl').value.trim();
             if (!image && id) {
                 const existing = appData.products.find(p => p.id === id);
                 if (existing && existing.image) image = existing.image;
@@ -1254,6 +1258,23 @@
             }
         });
 
+        // Arma un mensaje profesional para el SMS de "en camino",
+        // garantizando que no supere los 150 caracteres.
+        function buildShippingSmsMessage(order) {
+            const store = appData.storeName || 'nuestra tienda';
+            let msg = `Estimado/a ${order.customerName}: su pedido #${order.id} de ${store} ya va en camino. ¡Gracias por su compra!`;
+            if (msg.length > 150) {
+                msg = `Estimado/a ${order.customerName}: su pedido #${order.id} ya va en camino. ¡Gracias por su compra!`;
+            }
+            if (msg.length > 150) {
+                const suffix = `: su pedido #${order.id} ya va en camino. ¡Gracias por su compra!`;
+                const maxNameLen = Math.max(0, 150 - suffix.length - 'Estimado/a '.length);
+                const shortName = order.customerName.slice(0, maxNameLen).trim();
+                msg = `Estimado/a ${shortName}${suffix}`;
+            }
+            return msg.slice(0, 150);
+        }
+
         async function changeOrderStatus(id, status) {
             try {
                 const res = await apiGet('updateOrderStatus', { id, status });
@@ -1262,9 +1283,13 @@
                 if (o) o.status = status;
                 renderAdminOrders();
                 if (status === 'envío') {
-                    const message = `Pedido #${id} en camino. Gracias.`;
                     const order = appData.orders.find(o => o.id === id);
-                    if (order) window.open(`sms:${order.phone}?body=${encodeURIComponent(message)}`, '_blank');
+                    if (order && order.phone) {
+                        const message = buildShippingSmsMessage(order);
+                        window.open(`sms:${order.phone}?body=${encodeURIComponent(message)}`, '_blank');
+                    } else {
+                        alert('Este pedido no tiene un número de teléfono registrado.');
+                    }
                 }
                 if (status === 'entregado') {
                     const order = appData.orders.find(o => o.id === id);
@@ -1290,7 +1315,8 @@
         function sendSms(orderId) {
             const order = appData.orders.find(o => o.id === orderId);
             if (!order) return;
-            const message = `Pedido #${order.id} en camino. Gracias.`;
+            if (!order.phone) { alert('Este pedido no tiene un número de teléfono registrado.'); return; }
+            const message = buildShippingSmsMessage(order);
             window.open(`sms:${order.phone}?body=${encodeURIComponent(message)}`, '_blank');
         }
 
