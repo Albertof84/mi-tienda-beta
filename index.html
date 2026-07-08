@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Tienda Online</title>
     <style>
-        /* ===== ESTILOS (igual que antes) ===== */
+        /* ===== ESTILOS ===== */
         * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background:#f8f9fa; min-height:100vh; display:flex; flex-direction:column; }
         .header { background:#1a2a3a; color:#fff; padding:0.8rem 1.5rem; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; box-shadow:0 2px 6px rgba(0,0,0,0.15); position:sticky; top:0; z-index:100; }
@@ -137,13 +137,8 @@
 
     <!-- ===== CONTENEDOR ===== -->
     <div class="container">
-        <!-- Mensaje de bienvenida -->
         <div id="welcomeNotes" class="welcome-notes" style="display:none;"></div>
-
-        <!-- Mensaje de error de conexión -->
         <div id="connectionError" class="error-msg" style="display:none;"></div>
-
-        <!-- TIENDA -->
         <div id="shopSection" class="section active">
             <div id="productGrid" class="grid-products"><p class="empty-msg">Cargando productos...</p></div>
             <div class="cart-section" id="cartSection">
@@ -161,7 +156,6 @@
                 <button data-admin="orders">📋 Pedidos</button>
                 <button data-admin="config">⚙️ Configuración</button>
             </div>
-            <!-- Productos -->
             <div id="adminProducts" class="admin-section active">
                 <div class="admin-form">
                     <h3>Agregar / Editar producto</h3>
@@ -209,7 +203,6 @@
                 </div>
             </div>
 
-            <!-- Pedidos -->
             <div id="adminOrders" class="admin-section">
                 <div class="table-wrapper">
                     <h3>Pedidos</h3>
@@ -221,7 +214,6 @@
                 </div>
             </div>
 
-            <!-- Configuración -->
             <div id="adminConfig" class="admin-section">
                 <div class="admin-form">
                     <h3>Configuración de tienda</h3>
@@ -293,8 +285,7 @@
         // ============================================================
         //  CONFIGURACIÓN DE LA API (ACTUALIZA CON TU URL)
         // ============================================================
-        // 🔥 IMPORTANTE: Reemplaza con la URL que obtengas tras desplegar el nuevo script
-        const API_URL = 'https://script.google.com/macros/s/AKfycbzkihqC1SiYhi-tIOZMtoUOp2PkBuSP31gqYXFUsdZ0F_e-Ix8SeyY2cLsVqZ5sR23_Jg/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwvZqg4pvtUY2TUcsL57WX7mgSkVb-WIIOpIOcox7SyFuECSuVzAf3IE--Lc8KOo5pFlw/exec';
 
         // ============================================================
         //  FUNCIONES DE COMUNICACIÓN CON LA API
@@ -310,8 +301,7 @@
             try {
                 const res = await fetch(url.toString(), { 
                     signal: controller.signal,
-                    method: 'GET',
-                    mode: 'cors'
+                    method: 'GET'
                 });
                 clearTimeout(timeoutId);
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -334,8 +324,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action, ...payload }),
-                    signal: controller.signal,
-                    mode: 'cors'
+                    signal: controller.signal
                 });
                 clearTimeout(timeoutId);
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -382,12 +371,10 @@
             errorDiv.style.display = 'none';
             
             try {
-                // Cargar productos
                 const productsRes = await apiGet('getProducts');
                 if (productsRes.success) appData.products = productsRes.data || [];
                 else console.error('Error cargando productos:', productsRes.error);
 
-                // Cargar configuración
                 const configRes = await apiGet('getConfig');
                 if (configRes.success) {
                     const config = configRes.data || {};
@@ -402,7 +389,6 @@
                     appData.customerNotes = config.customerNotes || '';
                 }
 
-                // Cargar pedidos
                 const ordersRes = await apiGet('getOrders');
                 if (ordersRes.success) {
                     appData.orders = ordersRes.data || [];
@@ -412,7 +398,6 @@
                     }
                 }
 
-                // Actualizar UI
                 updateStoreUI();
                 updateWelcomeNotes();
                 renderShopProducts();
