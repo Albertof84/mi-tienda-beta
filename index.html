@@ -285,62 +285,60 @@
         // ============================================================
         //  CONFIGURACIÓN DE LA API (ACTUALIZA CON TU URL)
         // ============================================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbyja23l2VVYO8UtVUSUjV52XLc8ftlSfdTJayHkU-r1C0agaJnGgQIY6UEM8lwuVYkCbQ/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxALxjvRl1GWHLiMtcauvCx2eMP5W-YT5ujhMolpXMAbJW8fyI7tCdn__3SejNPsR3anw/exec';
 
         // ============================================================
-        //  FUNCIONES DE COMUNICACIÓN CON LA API
+        //  FUNCIONES DE COMUNICACIÓN CON LA API (JSONP)
+        //  Se usa JSONP (un <script> dinámico) en vez de fetch()
+        //  porque Apps Script a veces no devuelve el header CORS
+        //  necesario para que fetch() funcione desde otro dominio
+        //  (como GitHub Pages). Un <script src="..."> nunca es
+        //  bloqueado por CORS, así que esto es más confiable.
         // ============================================================
-        async function apiGet(action, params = {}) {
-            const url = new URL(API_URL);
-            url.searchParams.append('action', action);
-            Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
-            
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-            
-            try {
-                const res = await fetch(url.toString(), { 
-                    signal: controller.signal,
-                    method: 'GET'
-                });
-                clearTimeout(timeoutId);
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                return await res.json();
-            } catch (err) {
-                clearTimeout(timeoutId);
-                if (err.name === 'AbortError') {
-                    throw new Error('La petición tardó demasiado. Verifica tu conexión a internet.');
+        let jsonpCounter = 0;
+        function apiCall(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_cb_' + (jsonpCounter++) + '_' + Date.now();
+
+                const timeoutId = setTimeout(() => {
+                    cleanup();
+                    reject(new Error('La petición tardó demasiado. Verifica tu conexión a internet.'));
+                }, 20000);
+
+                function cleanup() {
+                    clearTimeout(timeoutId);
+                    delete window[callbackName];
+                    if (script.parentNode) script.parentNode.removeChild(script);
                 }
-                throw new Error(`Error de red: ${err.message}. Verifica que la URL sea correcta y que el Web App tenga acceso "Cualquiera".`);
-            }
+
+                window[callbackName] = function(data) {
+                    cleanup();
+                    resolve(data);
+                };
+
+                const url = new URL(API_URL);
+                url.searchParams.append('action', action);
+                url.searchParams.append('payload', JSON.stringify(params));
+                url.searchParams.append('callback', callbackName);
+
+                const script = document.createElement('script');
+                script.src = url.toString();
+                script.onerror = function() {
+                    cleanup();
+                    reject(new Error('Error al conectar con el servidor. Verifica que la URL sea correcta y que el Web App tenga acceso "Cualquiera".'));
+                };
+                document.head.appendChild(script);
+            });
         }
 
+        // Alias de compatibilidad: el resto del código llama a
+        // apiGet(action, params) y apiPost(action, payload).
+        // Ambos ahora usan el mismo mecanismo JSONP por debajo.
+        async function apiGet(action, params = {}) {
+            return apiCall(action, params);
+        }
         async function apiPost(action, payload) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
-            
-            try {
-                const res = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, ...payload }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                const text = await res.text();
-                try {
-                    return JSON.parse(text);
-                } catch(e) {
-                    throw new Error('Respuesta no JSON: ' + text.substring(0, 100));
-                }
-            } catch (err) {
-                clearTimeout(timeoutId);
-                if (err.name === 'AbortError') {
-                    throw new Error('La petición tardó demasiado. Revisa tu conexión.');
-                }
-                throw new Error(`Error al guardar: ${err.message}`);
-            }
+            return apiCall(action, payload);
         }
 
         // ============================================================
